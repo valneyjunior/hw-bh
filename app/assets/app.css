@@ -1,0 +1,214 @@
+/* ── Hostweb BH Tecnologia — Design System ─────────────────────────────────── */
+
+:root {
+  --hw-red:      #e8001c;
+  --hw-purple:   #6b0fa8;
+  --hw-dark:     #1a1a2e;
+  --hw-gradient: linear-gradient(135deg, #e8001c 0%, #6b0fa8 100%);
+  --hw-shadow:   0 4px 24px rgba(107,15,168,.12);
+  --hw-gray-bg:  #f5f5f7;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────────── */
+.hw-nav { background: var(--hw-dark); } /* mobile top bar */
+
+.hw-sidebar {
+  background: var(--hw-dark);
+  box-shadow: 4px 0 20px rgba(0,0,0,.2);
+}
+
+.hw-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: .625rem;
+  padding: .5rem .75rem;
+  border-radius: 8px;
+  font-size: .8125rem;
+  font-weight: 500;
+  color: rgba(255,255,255,.6);
+  transition: background .15s, color .15s;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.hw-sidebar-link svg { opacity: .65; flex-shrink: 0; transition: opacity .15s; }
+.hw-sidebar-link:hover { background: rgba(255,255,255,.08); color: #fff; }
+.hw-sidebar-link:hover svg { opacity: 1; }
+.hw-sidebar-link.active { background: rgba(255,255,255,.13); color: #fff; font-weight: 600; }
+.hw-sidebar-link.active svg { opacity: 1; }
+
+.hw-has-sidebar { padding-left: 14rem; }
+
+@media (max-width: 767px) {
+  .hw-has-sidebar { padding-left: 0; padding-top: 3.25rem; }
+}
+
+/* ── Gradient utilities ─────────────────────────────────────────────────────── */
+.hw-gradient-bg {
+  background: var(--hw-gradient);
+}
+.hw-gradient-text {
+  background: var(--hw-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hw-gradient-border-top {
+  border-top: 3px solid;
+  border-image: var(--hw-gradient) 1;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────────── */
+.hw-btn {
+  background: var(--hw-gradient);
+  color: #fff;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: opacity .2s, transform .15s, box-shadow .2s;
+  box-shadow: 0 4px 16px rgba(232,0,28,.25);
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+}
+.hw-btn:hover:not(:disabled) {
+  opacity: .88;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(232,0,28,.3);
+}
+.hw-btn:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.hw-btn-ghost {
+  background: transparent;
+  color: #fff;
+  border: 1.5px solid rgba(255,255,255,.35);
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .2s, border-color .2s;
+}
+.hw-btn-ghost:hover {
+  background: rgba(255,255,255,.12);
+  border-color: rgba(255,255,255,.6);
+}
+
+/* ── Icons & Avatars ────────────────────────────────────────────────────────── */
+.hw-icon-bg {
+  background: var(--hw-gradient);
+  color: #fff;
+  border-radius: 12px;
+}
+.hw-avatar {
+  background: var(--hw-gradient);
+  color: #fff;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+/* ── Badges ─────────────────────────────────────────────────────────────────── */
+.hw-badge {
+  background: linear-gradient(135deg, rgba(232,0,28,.08), rgba(107,15,168,.08));
+  color: var(--hw-red);
+  border: 1px solid rgba(232,0,28,.2);
+}
+.hw-badge-purple {
+  background: linear-gradient(135deg, rgba(107,15,168,.08), rgba(232,0,28,.05));
+  color: var(--hw-purple);
+  border: 1px solid rgba(107,15,168,.2);
+}
+
+/* ── Form inputs ────────────────────────────────────────────────────────────── */
+.hw-input {
+  background: #f8f8f8;
+  border: 1.5px solid #e8e8e8;
+  border-radius: 8px;
+  transition: border-color .2s, box-shadow .2s, background .2s;
+  width: 100%;
+}
+.hw-input:focus {
+  outline: none;
+  background: #fff;
+  border-color: var(--hw-purple);
+  box-shadow: 0 0 0 3px rgba(107,15,168,.12);
+}
+
+/* ── Tabs ───────────────────────────────────────────────────────────────────── */
+.hw-tab {
+  color: #666;
+  border-bottom: 2px solid transparent;
+  transition: color .2s, border-color .2s;
+  font-size: .875rem;
+  font-weight: 500;
+}
+.hw-tab:hover {
+  color: var(--hw-red);
+}
+.hw-tab.active {
+  color: var(--hw-red);
+  border-bottom-color: var(--hw-red);
+  font-weight: 600;
+}
+
+/* ── Cards ──────────────────────────────────────────────────────────────────── */
+.hw-card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: var(--hw-shadow);
+  border: none;
+}
+.hw-card-header {
+  background: var(--hw-gradient);
+  border-radius: 16px 16px 0 0;
+  color: #fff;
+  padding: 24px 32px;
+}
+
+/* ── Login page ─────────────────────────────────────────────────────────────── */
+.hw-login-bg {
+  background: var(--hw-gray-bg);
+  min-height: 100vh;
+}
+.hw-login-card {
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 8px 40px rgba(107,15,168,.15);
+  overflow: hidden;
+}
+.hw-login-header {
+  background: var(--hw-gradient);
+  padding: 28px 32px;
+  text-align: center;
+  color: #fff;
+}
+
+/* ── Stat value with gradient ───────────────────────────────────────────────── */
+.hw-stat {
+  background: var(--hw-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+}
+
+/* ── Section header tag ─────────────────────────────────────────────────────── */
+.hw-section-tag {
+  background: linear-gradient(135deg, rgba(232,0,28,.08), rgba(107,15,168,.08));
+  color: var(--hw-red);
+  border: 1px solid rgba(232,0,28,.15);
+  border-radius: 50px;
+  font-weight: 600;
+  font-size: .75rem;
+  padding: 4px 14px;
+  display: inline-block;
+}

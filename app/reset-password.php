@@ -10,10 +10,10 @@ $error = $success = '';
 // Valida o token
 $db   = getDb();
 $stmt = $db->prepare("
-    SELECT pr.*, u.name, u.email
-    FROM password_resets pr
-    JOIN users u ON u.id = pr.user_id
-    WHERE pr.token = ? AND pr.used_at IS NULL AND pr.expires_at > NOW()
+    SELECT ts.*, u.nome, u.email
+    FROM tokens_senha ts
+    JOIN usuarios u ON u.id = ts.usuario_id
+    WHERE ts.token = ? AND ts.usado = FALSE AND ts.expira_em > NOW()
 ");
 $stmt->execute([$token]);
 $reset = $stmt->fetch();
@@ -30,9 +30,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $reset) {
     elseif ($pass !== $confirm)  $error = 'As senhas não coincidem.';
     else {
         $hash = password_hash($pass, PASSWORD_BCRYPT, ['cost' => 12]);
-        $db->prepare("UPDATE users SET password_hash=?, must_change_pass=0 WHERE id=?")
-           ->execute([$hash, $reset['user_id']]);
-        $db->prepare("UPDATE password_resets SET used_at=NOW() WHERE token=?")
+        $db->prepare("UPDATE usuarios SET senha_hash=?, must_change_pass=FALSE WHERE id=?")
+           ->execute([$hash, $reset['usuario_id']]);
+        $db->prepare("UPDATE tokens_senha SET usado=TRUE WHERE token=?")
            ->execute([$token]);
         $success = true;
     }
@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $reset) {
       </div>
       <h1 class="text-xl font-bold text-white">Nova senha</h1>
       <?php if ($reset && !$success): ?>
-        <p class="text-sm text-white/75 mt-1">Olá, <strong><?= e($reset['name']) ?></strong></p>
+        <p class="text-sm text-white/75 mt-1">Olá, <strong><?= e($reset['nome']) ?></strong></p>
       <?php endif; ?>
     </div>
 

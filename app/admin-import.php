@@ -2,8 +2,8 @@
 require_once 'includes/auth.php';
 require_once 'includes/db.php';
 require_once 'includes/functions.php';
-$admin = requireAdmin();
-$db    = getDb();
+$user = requireCoordenador();
+$db   = getDb();
 
 // ── Download template ────────────────────────────────────────────────────────
 if (($_GET['action'] ?? '') === 'template') {
@@ -11,9 +11,9 @@ if (($_GET['action'] ?? '') === 'template') {
     header('Content-Disposition: attachment; filename="bh-tracker-template.csv"');
     echo "\xEF\xBB\xBF";
     $f = fopen('php://output', 'w');
-    fputcsv($f, ['Colaborador','Email','Chamado','Inicio','Fim','Descricao','Validado'], ';');
-    fputcsv($f, ['Hanny Santos','hanny@hostweb.cloud','0426-000129','01/11/2025 22:00','02/11/2025 00:30','Cliente X - Servidor fora do ar','Sim'], ';');
-    fputcsv($f, ['Danilo Ferreira','danilo@hostweb.cloud','0426-000215','15/11/2025 03:00','15/11/2025 04:15','Cliente Y - Queda de link','Nao'], ';');
+    fputcsv($f, ['Colaborador','Email','Data','Hora Inicio','Hora Fim','Chamado','Motivo','Feriado','Validado'], ';');
+    fputcsv($f, ['Hanny Santos','hanny@hostweb.cloud','01/11/2025','22:00','00:30','0426-000129','Cliente X - Servidor fora do ar','Nao','Sim'], ';');
+    fputcsv($f, ['Danilo Ferreira','danilo@hostweb.cloud','15/11/2025','03:00','04:15','0426-000215','Cliente Y - Queda de link','Nao','Nao'], ';');
     fclose($f);
     exit;
 }
@@ -21,12 +21,19 @@ if (($_GET['action'] ?? '') === 'template') {
 // ── Process upload ───────────────────────────────────────────────────────────
 $results = null;
 
-function parseDateBR(string $s): ?string {
+function parseDateBRDate(string $s): ?string {
     $s = trim($s);
-    if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/', $s, $m))
-        return "{$m[3]}-{$m[2]}-{$m[1]} {$m[4]}:{$m[5]}:00";
-    if (preg_match('/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/', $s))
+    if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $s, $m))
+        return "{$m[3]}-{$m[2]}-{$m[1]}";
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $s))
         return $s;
+    return null;
+}
+
+function parseTime(string $s): ?string {
+    $s = trim($s);
+    if (preg_match('/^(\d{1,2}):(\d{2})$/', $s, $m))
+        return sprintf('%02d:%02d:00', $m[1], $m[2]);
     return null;
 }
 
@@ -47,8 +54,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csvfile'])) {
 
         $header = fgetcsv($handle, 0, $sep);
 
-        $now         = date('Y-m-d H:i:s');
         $defaultHash = password_hash('Hostweb@2025', PASSWORD_BCRYPT, ['cost' => 12]);
+        $importadorId = $user['id'];
+
+        // Sector filter: coordinator can only import for their sector's users
+        $setorFilter = isAdmin() ? null : $user['setor_id'];
 
         $stats = ['users_created'=>0,'users_existing'=>0,'records_ok'=>0,'records_skipped'=>0,'errors'=>[]];
         $userCache = [];
@@ -56,15 +66,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csvfile'])) {
         $row = 1;
         while (($cols = fgetcsv($handle, 0, $sep)) !== false) {
             $row++;
-            if (count($cols) < 6) continue;
+            if (count($cols) < 7) { $stats['records_skipped']++; continue; }
 
-            [$name, $email, $ticket, $startRaw, $endRaw, $desc] = array_map('trim', $cols);
-            $validado = strtolower(trim($cols[6] ?? 'nao'));
-            $isValidated = in_array($validado, ['sim','s','yes','1','true']);
+            [$name, $email, $dateRaw, $inicioRaw, $fimRaw, $chamado, $motivo] = array_map('trim', $cols);
+            $feriadoRaw = strtolower(trim($cols[7] ?? 'nao'));
+            $validadoRaw = strtolower(trim($cols[8] ?? 'nao'));
+            $feriado   = in_array($feriadoRaw,  ['sim','s','yes','1','true']);
+            $aprovado  = in_array($validadoRaw, ['sim','s','yes','1','true']);
             $email = strtolower($email);
 
-            if (!$name || !$email || !$ticket || !$startRaw || !$endRaw) {
-                $stats['errors'][] = "Linha $row: campos obrigatórios ausentes.";
+            if (!$name || !$email || !$dateRaw || !$inicioRaw || !$fimRaw || !$chamado) {
+                $stats['errors'][] = "Linha $row: campos obrigatórios ausentes (nome, email, data, hora início, hora fim, chamado).";
                 $stats['records_skipped']++;
                 continue;
             }
@@ -74,42 +86,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csvfile'])) {
                 continue;
             }
 
-            $startAt = parseDateBR($startRaw);
-            $endAt   = parseDateBR($endRaw);
-            if (!$startAt || !$endAt) {
-                $stats['errors'][] = "Linha $row: data inválida. Use dd/mm/aaaa HH:MM.";
+            $dataAcionamento = parseDateBRDate($dateRaw);
+            $horaInicio      = parseTime($inicioRaw);
+            $horaFim         = parseTime($fimRaw);
+
+            if (!$dataAcionamento) {
+                $stats['errors'][] = "Linha $row: data inválida '$dateRaw'. Use dd/mm/aaaa.";
                 $stats['records_skipped']++;
                 continue;
             }
-            if ($endAt <= $startAt) {
-                $stats['errors'][] = "Linha $row: fim deve ser posterior ao início.";
+            if (!$horaInicio || !$horaFim) {
+                $stats['errors'][] = "Linha $row: hora inválida. Use HH:MM.";
                 $stats['records_skipped']++;
                 continue;
             }
 
+            // Resolve user
             if (!isset($userCache[$email])) {
-                $stmt = $db->prepare("SELECT id FROM users WHERE email = ?");
+                $stmt = $db->prepare("SELECT id, setor_id FROM usuarios WHERE email = ?");
                 $stmt->execute([$email]);
                 $existing = $stmt->fetch();
                 if ($existing) {
-                    $userCache[$email] = $existing['id'];
+                    // Coordinator can only import for their sector
+                    if ($setorFilter && $existing['setor_id'] !== $setorFilter) {
+                        $stats['errors'][] = "Linha $row: colaborador $email pertence a outro setor.";
+                        $stats['records_skipped']++;
+                        continue;
+                    }
+                    $userCache[$email] = (int)$existing['id'];
                     $stats['users_existing']++;
                 } else {
-                    $uid = generateId();
-                    $db->prepare("INSERT INTO users (id,name,email,password_hash,role,must_change_pass) VALUES (?,?,?,?,'collaborator',1)")
-                       ->execute([$uid, $name, $email, $defaultHash]);
-                    $userCache[$email] = $uid;
+                    // Create user with analista role
+                    $db->prepare("INSERT INTO usuarios (nome, email, senha_hash, status, setor_id, must_change_pass)
+                                  VALUES (?, ?, ?, 'ativo', ?, TRUE)")
+                       ->execute([$name, $email, $defaultHash, $setorFilter]);
+                    $newId = (int)$db->lastInsertId('usuarios_id_seq');
+                    // Assign analista role
+                    $pId = $db->query("SELECT id FROM perfis WHERE nome='analista'")->fetchColumn();
+                    if ($pId) $db->prepare("INSERT INTO usuario_perfis (usuario_id, perfil_id) VALUES (?,?) ON CONFLICT DO NOTHING")->execute([$newId, $pId]);
+                    $userCache[$email] = $newId;
                     $stats['users_created']++;
                 }
             }
 
             $uid = $userCache[$email];
-            $rid = generateId();
-            $vat = $isValidated ? $now  : null;
-            $vby = $isValidated ? $admin['id'] : null;
 
-            $db->prepare("INSERT INTO records (id,user_id,started_at,ended_at,ticket,description,validated_at,validated_by) VALUES (?,?,?,?,?,?,?,?)")
-               ->execute([$rid, $uid, $startAt, $endAt, $ticket, $desc, $vat, $vby]);
+            // Compute total_minutos (handles midnight crossing)
+            $hi = substr($horaInicio, 0, 5);
+            $hf = substr($horaFim, 0, 5);
+            $totalMinutos = totalMinutosLancamento($dataAcionamento, $hi, $hf);
+            $foraDoPrazo  = foraDoPrazo($dataAcionamento, $hf);
+            $status       = $aprovado ? 'aprovado' : 'pendente';
+
+            $db->prepare("
+                INSERT INTO lancamentos
+                    (usuario_id, data_acionamento, hora_inicio, hora_fim, chamado, motivo,
+                     feriado, total_minutos, fora_do_prazo, status, revisado_por, revisado_em, origem)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'importacao')
+            ")->execute([
+                $uid, $dataAcionamento, $horaInicio, $horaFim, $chamado, $motivo,
+                $feriado ? 'true' : 'false', $totalMinutos, $foraDoPrazo ? 'true' : 'false',
+                $status,
+                $aprovado ? $importadorId : null,
+                $aprovado ? date('Y-m-d H:i:s') : null,
+            ]);
             $stats['records_ok']++;
         }
 
@@ -188,12 +228,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csvfile'])) {
       <?php endif; ?>
 
       <div class="flex gap-2 mt-5">
-        <a href="/admin.php" class="hw-btn flex-1 py-2.5 text-sm justify-center">
-          Ir para validação
-        </a>
-        <a href="/admin-import.php" class="flex-1 text-center border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium py-2.5 rounded-lg transition">
-          Nova importação
-        </a>
+        <a href="/admin.php" class="hw-btn flex-1 py-2.5 text-sm justify-center">Ir para validação</a>
+        <a href="/admin-import.php" class="flex-1 text-center border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium py-2.5 rounded-lg transition">Nova importação</a>
       </div>
     </div>
   <?php endif; ?>
@@ -229,13 +265,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csvfile'])) {
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
         <?php
         $cols = [
-          ['Colaborador',  'Nome completo do colaborador', true],
-          ['Email',        'E-mail (usado para vincular ou criar conta)', true],
-          ['Chamado',      'Número do ticket (ex: 0426-000129)', true],
-          ['Inicio',       'dd/mm/aaaa HH:MM', true],
-          ['Fim',          'dd/mm/aaaa HH:MM', true],
-          ['Descricao',    'Cliente + descrição do problema', true],
-          ['Validado',     '"Sim" ou "Nao"', false],
+          ['Colaborador', 'Nome completo do colaborador', true],
+          ['Email',       'E-mail (vincula ou cria conta)', true],
+          ['Data',        'dd/mm/aaaa — data do acionamento', true],
+          ['Hora Inicio', 'HH:MM — hora de início', true],
+          ['Hora Fim',    'HH:MM — hora de fim (pode ser dia seguinte)', true],
+          ['Chamado',     'Número do ticket (ex: 0426-000129)', true],
+          ['Motivo',      'Descrição do atendimento', true],
+          ['Feriado',     '"Sim" ou "Nao"', false],
+          ['Validado',    '"Sim" para importar como aprovado', false],
         ];
         foreach ($cols as [$col, $desc, $req]): ?>
           <div class="flex items-start gap-2 text-xs">
@@ -246,7 +284,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csvfile'])) {
           </div>
         <?php endforeach; ?>
       </div>
-      <p class="text-xs text-gray-400 mt-3">* Obrigatório · Separador: ponto e vírgula (;)</p>
+      <p class="text-xs text-gray-400 mt-3">* Obrigatório · Separador: ponto e vírgula (;) · Hora Fim após meia-noite é tratada como dia seguinte</p>
     </div>
 
     <!-- Step 2: Upload -->

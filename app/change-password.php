@@ -12,10 +12,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     elseif ($pass !== $confirm)  $error = 'As senhas não coincidem.';
     else {
         $hash = password_hash($pass, PASSWORD_BCRYPT, ['cost' => 12]);
-        getDb()->prepare("UPDATE users SET password_hash = ?, must_change_pass = 0 WHERE id = ?")
+        getDb()->prepare("UPDATE usuarios SET senha_hash = ?, must_change_pass = FALSE WHERE id = ?")
                ->execute([$hash, $user['id']]);
         $_SESSION['user']['must_change_pass'] = false;
-        header('Location: ' . ($user['role'] === 'admin' ? '/admin.php' : '/dashboard.php'));
+        header('Location: ' . homeUrl());
         exit;
     }
 }

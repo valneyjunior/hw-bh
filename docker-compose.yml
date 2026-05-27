@@ -1,45 +1,35 @@
-services:
-  db:
-    image: mysql:8.0
-    restart: always
-    environment:
-      MYSQL_DATABASE: bh_tracker
-      MYSQL_USER: bh_user
-      MYSQL_PASSWORD: ${DB_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-    volumes:
-      - dbdata:/var/lib/mysql
-      - ./app/sql/init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "bh_user", "-p${DB_PASSWORD}"]
-      interval: 5s
-      timeout: 5s
-      retries: 15
+version: '3.9'
 
+services:
   app:
     build: ./app
-    restart: always
     ports:
       - "3000:80"
+    env_file: .env
     environment:
       DB_HOST: db
-      DB_NAME: bh_tracker
-      DB_USER: bh_user
-      DB_PASSWORD: ${DB_PASSWORD}
-      ADMIN_EMAIL: ${ADMIN_EMAIL}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-      ADMIN_NAME: ${ADMIN_NAME}
-      # E-mail (SMTP)
-      APP_URL: ${APP_URL:-http://localhost:3000}
-      MAIL_HOST: ${MAIL_HOST:-}
-      MAIL_PORT: ${MAIL_PORT:-587}
-      MAIL_USER: ${MAIL_USER:-}
-      MAIL_PASS: ${MAIL_PASS:-}
-      MAIL_FROM: ${MAIL_FROM:-noreply@hostweb.cloud}
-      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-BH Tecnologia}
+      DB_PORT: 5432
     depends_on:
       db:
         condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${DB_NAME:-bh_tecnologia}
+      POSTGRES_USER: ${DB_USER:-bh_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./app/sql/init_postgres.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-bh_user} -d ${DB_NAME:-bh_tecnologia}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
 
 volumes:
-  dbdata:
+  pgdata:

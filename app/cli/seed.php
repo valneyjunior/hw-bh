@@ -11,19 +11,43 @@ if (!$email || !$password || !$name) {
 }
 
 $db = null;
-for ($i = 0; $i < 12; $i++) {
+for ($i = 0; $i < 15; $i++) {
     try { $db = getDb(); break; }
     catch (Exception $e) { echo "Aguardando banco... (tentativa $i)\n"; sleep(3); }
 }
-if (!$db) { echo "Falha ao conectar.\n"; exit(1); }
+if (!$db) { echo "Falha ao conectar ao PostgreSQL.\n"; exit(1); }
 
-$stmt = $db->prepare("SELECT id FROM users WHERE email = ?");
+// Verifica se admin já existe
+$stmt = $db->prepare("SELECT id FROM usuarios WHERE email = ?");
 $stmt->execute([$email]);
 if ($stmt->fetch()) { echo "Admin $email já existe.\n"; exit(0); }
 
-$id   = generateId();
-$hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
-$db->prepare("INSERT INTO users (id, name, email, password_hash, role, must_change_pass) VALUES (?,?,?,?,'admin',0)")
-   ->execute([$id, $name, $email, $hash]);
+// Busca ID do perfil administrador
+$perfil = $db->query("SELECT id FROM perfis WHERE nome = 'administrador'")->fetch();
+if (!$perfil) { echo "Perfil 'administrador' não encontrado. Verifique o init_postgres.sql.\n"; exit(1); }
 
-echo "Admin criado: $email\n";
+// Busca ID do setor padrão (Serviços)
+$setor = $db->query("SELECT id FROM setores WHERE nome = 'Serviços'")->fetch();
+$setorId = $setor ? $setor['id'] : null;
+
+$hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
+
+$db->prepare(
+    "INSERT INTO usuarios (nome, email, senha_hash, setor_id, must_change_pass) VALUES (?, ?, ?, ?, FALSE)"
+)->execute([$name, strtolower($email), $hash, $setorId]);
+
+$userId = $db->lastInsertId('usuarios_id_seq');
+
+// Vincula perfil administrador
+$db->prepare(
+    "INSERT INTO usuario_perfis (usuario_id, perfil_id) VALUES (?, ?)"
+)->execute([$userId, $perfil['id']]);
+
+// Também vincula como analista e coordenador para ter acesso completo
+$outros = $db->query("SELECT id FROM perfis WHERE nome IN ('analista','coordenador')")->fetchAll();
+foreach ($outros as $p) {
+    $db->prepare("INSERT INTO usuario_perfis (usuario_id, perfil_id) VALUES (?, ?)")
+       ->execute([$userId, $p['id']]);
+}
+
+echo "Admin criado: $email (ID: $userId)\n";

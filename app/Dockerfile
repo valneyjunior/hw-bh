@@ -1,10 +1,10 @@
 FROM php:8.2-apache
 
-RUN apt-get update && apt-get install -y unzip git curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y unzip git curl libpq-dev && rm -rf /var/lib/apt/lists/*
 
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
-RUN docker-php-ext-install pdo pdo_mysql
+RUN docker-php-ext-install pdo pdo_pgsql
 
 # Instala dependências PHP (PHPMailer) antes de copiar o app (cache eficiente)
 COPY composer.json /var/www/html/composer.json

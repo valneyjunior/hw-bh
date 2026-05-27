@@ -3,38 +3,45 @@ require_once dirname(__DIR__) . '/includes/auth.php';
 require_once dirname(__DIR__) . '/includes/db.php';
 require_once dirname(__DIR__) . '/includes/functions.php';
 
-$admin  = apiAdmin();
-$body   = jsonBody();
+$admin = apiAdmin();
+$body  = jsonBody();
 
-$userId = $body['user_id']        ?? '';
-$salary = $body['monthly_salary'] ?? null;
-$ws     = $body['work_start']     ?? null;
-$we     = $body['work_end']       ?? null;
+$userId     = (int)($body['user_id']           ?? 0);
+$salario    = $body['salario_bruto']            ?? null;
+$adicional  = !empty($body['adicional_atrativo']);
+$adicionalV = (float)($body['adicional_valor'] ?? 0);
+$ws         = trim($body['work_start']          ?? '');
+$we         = trim($body['work_end']            ?? '');
 
 if (!$userId) jsonOut(['error' => 'user_id obrigatório.'], 422);
-if ($salary === null || !is_numeric($salary) || $salary < 0)
+if ($salario === null || !is_numeric($salario) || (float)$salario < 0)
     jsonOut(['error' => 'Salário inválido.'], 422);
+if ($adicional && $adicionalV <= 0)
+    jsonOut(['error' => 'Valor do adicional deve ser maior que zero.'], 422);
 
-// Validar horários se fornecidos
-if ($ws !== null || $we !== null) {
-    if (!preg_match('/^\d{2}:\d{2}$/', $ws ?? '') || !preg_match('/^\d{2}:\d{2}$/', $we ?? ''))
+if ($ws && $we) {
+    if (!preg_match('/^\d{2}:\d{2}$/', $ws) || !preg_match('/^\d{2}:\d{2}$/', $we))
         jsonOut(['error' => 'Horário comercial inválido.'], 422);
-    if (strtotime($ws) >= strtotime($we))
-        jsonOut(['error' => 'Horário de início deve ser anterior ao término.'], 422);
 }
 
-$db = getDb();
-
-$stmt = $db->prepare("SELECT id FROM users WHERE id = ? AND role = 'collaborator'");
+$db   = getDb();
+$stmt = $db->prepare("SELECT id FROM usuarios WHERE id = ?");
 $stmt->execute([$userId]);
-if (!$stmt->fetch()) jsonOut(['error' => 'Colaborador não encontrado.'], 404);
+if (!$stmt->fetch()) jsonOut(['error' => 'Usuário não encontrado.'], 404);
 
-$workStart = $ws ?? '08:00';
-$workEnd   = $we ?? '18:00';
+$workStart    = $ws ?: '08:00';
+$workEnd      = $we ?: '18:00';
+$salarioBruto = (float)$salario;
+$adiValor     = $adicional ? $adicionalV : 0.0;
 
-$db->prepare("INSERT INTO collaborator_salary (user_id, monthly_salary, work_start, work_end)
-              VALUES (?,?,?,?)
-              ON DUPLICATE KEY UPDATE monthly_salary=?, work_start=?, work_end=?, updated_at=NOW()")
-   ->execute([$userId, $salary, $workStart, $workEnd, $salary, $workStart, $workEnd]);
+$db->prepare("
+    UPDATE usuarios SET
+        salario_bruto = ?,
+        adicional_atrativo = ?,
+        adicional_valor = ?,
+        work_start = ?,
+        work_end = ?
+    WHERE id = ?
+")->execute([$salarioBruto, $adicional ? 'true' : 'false', $adiValor, $workStart, $workEnd, $userId]);
 
 jsonOut(['ok' => true]);

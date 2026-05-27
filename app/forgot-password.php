@@ -13,27 +13,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($email && filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $db   = getDb();
-        $stmt = $db->prepare("SELECT id, name FROM users WHERE email = ? AND active = 1");
+        $stmt = $db->prepare("SELECT id, nome FROM usuarios WHERE email = ? AND status = 'ativo'");
         $stmt->execute([$email]);
         $user = $stmt->fetch();
 
         if ($user) {
             // Invalida tokens anteriores
-            $db->prepare("UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL")
+            $db->prepare("UPDATE tokens_senha SET usado = TRUE WHERE usuario_id = ? AND usado = FALSE")
                ->execute([$user['id']]);
 
             // Gera novo token
-            $token     = bin2hex(random_bytes(32));
-            $expiresAt = date('Y-m-d H:i:s', strtotime('+1 hour'));
-            $id        = generateId();
+            $token    = bin2hex(random_bytes(32));
+            $expiraEm = date('Y-m-d H:i:s', strtotime('+1 hour'));
 
-            $db->prepare("INSERT INTO password_resets (id, user_id, token, expires_at) VALUES (?,?,?,?)")
-               ->execute([$id, $user['id'], $token, $expiresAt]);
+            $db->prepare("INSERT INTO tokens_senha (token, usuario_id, expira_em) VALUES (?,?,?)")
+               ->execute([$token, $user['id'], $expiraEm]);
 
             $appUrl   = rtrim(getenv('APP_URL') ?: 'http://localhost:3000', '/');
             $resetUrl = $appUrl . '/reset-password.php?token=' . $token;
 
-            mailPasswordReset($email, $user['name'], $resetUrl);
+            mailPasswordReset($email, $user['nome'], $resetUrl);
         }
     }
 

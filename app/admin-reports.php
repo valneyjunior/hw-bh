@@ -299,6 +299,8 @@ function chartHHMM(int $mins): string {
       </div>
       <p class="text-xl font-bold text-gray-900"><?= chartHHMM($totalMin) ?></p>
       <p class="text-xs text-gray-400 mb-2"><?= $p['vc'] + $p['pc'] ?> acionamentos · <?= $pct ?>% do total</p>
+      <a href="/admin-report-colaborador.php?usuario_id=<?= $uid ?>&from=<?= urlencode($from) ?>&to=<?= urlencode($to) ?>"
+         class="inline-block text-xs font-medium hover:underline mt-1" style="color:var(--hw-purple)">Ver detalhe →</a>
       <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
         <div class="h-full rounded-full" style="width:<?= $pct ?>%;background:var(--hw-gradient)"></div>
       </div>
@@ -361,17 +363,17 @@ function chartHHMM(int $mins): string {
       <div class="grid grid-cols-3 gap-4">
         <div class="hw-kpi-card">
           <p class="hw-kpi-title" style="color:#6b0fa8">Total a pagar</p>
-          <p class="hw-kpi-value" style="color:#6b0fa8"><?= fmtBRL($totalValor) ?></p>
+          <p class="hw-kpi-value-brl" style="color:#6b0fa8"><?= fmtBRL($totalValor) ?></p>
           <p class="text-xs text-gray-400 mt-0.5"><?= $totalVC ?> acionamentos aprovados</p>
         </div>
         <div class="hw-kpi-card">
           <p class="hw-kpi-title hw-kpi-teal">Média por acionamento</p>
-          <p class="hw-kpi-value hw-kpi-teal"><?= fmtBRL($mediaValor) ?></p>
+          <p class="hw-kpi-value-brl hw-kpi-teal"><?= fmtBRL($mediaValor) ?></p>
           <p class="text-xs text-gray-400 mt-0.5">custo médio individual</p>
         </div>
         <div class="hw-kpi-card">
           <p class="hw-kpi-title hw-kpi-blue">Hora base média</p>
-          <p class="hw-kpi-value hw-kpi-blue"><?= fmtBRL($horaBaseMedia) ?>/h</p>
+          <p class="hw-kpi-value-brl hw-kpi-blue"><?= fmtBRL($horaBaseMedia) ?>/h</p>
           <p class="text-xs text-gray-400 mt-0.5">salário médio ÷ 220h</p>
         </div>
       </div>

@@ -27,7 +27,7 @@ function e(string $s): string {
 }
 
 function fmtBRL(float $v): string {
-    return 'R$\u{00a0}' . number_format($v, 2, ',', '.');
+    return 'R$&nbsp;' . number_format($v, 2, ',', '.');
 }
 
 // ── Cálculo de data/hora dos lançamentos ─────────────────────────────────────

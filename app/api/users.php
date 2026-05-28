@@ -46,14 +46,25 @@ if ($action === 'create') {
     $pass = generateToken(6); // 12-char hex temp password
     $hash = password_hash($pass, PASSWORD_BCRYPT, ['cost' => 12]);
 
-    $db->prepare("
-        INSERT INTO usuarios (nome, email, senha_hash, status, setor_id, salario_bruto,
-                              adicional_atrativo, adicional_valor, work_start, work_end,
-                              lunch_start, lunch_minutes, must_change_pass)
-        VALUES (?, ?, ?, 'ativo', ?, ?, ?, ?, ?, ?, ?, ?, TRUE)
-    ")->execute([$nome, $email, $hash, $setorId, $salario,
-                 $adicional ? 'true' : 'false', $adiValor, $ws, $we,
-                 $lunchStart, $lunchMins]);
+    try {
+        $db->prepare("
+            INSERT INTO usuarios (nome, email, senha_hash, status, setor_id, salario_bruto,
+                                  adicional_atrativo, adicional_valor, work_start, work_end,
+                                  lunch_start, lunch_minutes, must_change_pass)
+            VALUES (?, ?, ?, 'ativo', ?, ?, ?, ?, ?, ?, ?, ?, TRUE)
+        ")->execute([$nome, $email, $hash, $setorId, $salario,
+                     $adicional ? 'true' : 'false', $adiValor, $ws, $we,
+                     $lunchStart, $lunchMins]);
+    } catch (\Throwable $e) {
+        // Fallback: schema sem colunas lunch_*
+        $db->prepare("
+            INSERT INTO usuarios (nome, email, senha_hash, status, setor_id, salario_bruto,
+                                  adicional_atrativo, adicional_valor, work_start, work_end,
+                                  must_change_pass)
+            VALUES (?, ?, ?, 'ativo', ?, ?, ?, ?, ?, ?, TRUE)
+        ")->execute([$nome, $email, $hash, $setorId, $salario,
+                     $adicional ? 'true' : 'false', $adiValor, $ws, $we]);
+    }
 
     $newId = (int)$db->lastInsertId('usuarios_id_seq');
 
@@ -116,16 +127,28 @@ if ($action === 'update') {
     $stmt->execute([$email, $id]);
     if ($stmt->fetch()) jsonOut(['error' => 'E-mail já cadastrado por outro usuário.'], 409);
 
-    $db->prepare("
-        UPDATE usuarios SET nome=?, email=?, setor_id=?, salario_bruto=?,
-                            adicional_atrativo=?, adicional_valor=?,
-                            work_start=?, work_end=?,
-                            lunch_start=?, lunch_minutes=?
-        WHERE id=?
-    ")->execute([$nome, $email, $setorId, $salario,
-                 $adicional ? 'true' : 'false', $adiValor,
-                 $ws ?: '08:00', $we ?: '18:00',
-                 $lunchStart ?: '12:00', $lunchMins, $id]);
+    try {
+        $db->prepare("
+            UPDATE usuarios SET nome=?, email=?, setor_id=?, salario_bruto=?,
+                                adicional_atrativo=?, adicional_valor=?,
+                                work_start=?, work_end=?,
+                                lunch_start=?, lunch_minutes=?
+            WHERE id=?
+        ")->execute([$nome, $email, $setorId, $salario,
+                     $adicional ? 'true' : 'false', $adiValor,
+                     $ws ?: '08:00', $we ?: '18:00',
+                     $lunchStart ?: '12:00', $lunchMins, $id]);
+    } catch (\Throwable $e) {
+        // Fallback: schema sem colunas lunch_*
+        $db->prepare("
+            UPDATE usuarios SET nome=?, email=?, setor_id=?, salario_bruto=?,
+                                adicional_atrativo=?, adicional_valor=?,
+                                work_start=?, work_end=?
+            WHERE id=?
+        ")->execute([$nome, $email, $setorId, $salario,
+                     $adicional ? 'true' : 'false', $adiValor,
+                     $ws ?: '08:00', $we ?: '18:00', $id]);
+    }
 
     // Resync roles
     $db->prepare("DELETE FROM usuario_perfis WHERE usuario_id = ?")->execute([$id]);

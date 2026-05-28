@@ -222,7 +222,7 @@ function parseRoles(mixed $raw): array {
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="hw-label">Salário bruto (R$)</label>
-          <input type="number" id="u-salario" step="0.01" min="0" placeholder="0,00" class="hw-input">
+          <input type="text" id="u-salario" placeholder="0,00" class="hw-input" oninput="applyBRLMask(this)" inputmode="numeric">
         </div>
         <div id="adicional-section">
           <label class="hw-label">Adicional Atrativo</label>
@@ -230,8 +230,8 @@ function parseRoles(mixed $raw): array {
             <input type="checkbox" id="u-adicional" onchange="toggleAdicional()" class="w-4 h-4 accent-purple-600">
             <span class="text-sm text-gray-700">Sim</span>
           </label>
-          <input type="number" id="u-valor-adicional" step="0.01" min="0" placeholder="Valor em R$"
-            class="hw-input hidden">
+          <input type="text" id="u-valor-adicional" placeholder="0,00" inputmode="numeric"
+            class="hw-input hidden" oninput="applyBRLMask(this)">
         </div>
       </div>
 
@@ -297,6 +297,23 @@ function applyTimeMask(el) {
   el.value = v;
 }
 
+function applyBRLMask(el) {
+  let v = el.value.replace(/\D/g, '');
+  if (!v) { el.value = ''; return; }
+  const num = parseInt(v, 10) / 100;
+  el.value = num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function parseBRL(str) {
+  if (!str) return 0;
+  return parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0;
+}
+
+function numToBRL(val) {
+  const num = parseFloat(val) || 0;
+  return num > 0 ? num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.edit-user-btn').forEach(btn => {
     btn.addEventListener('click', () => openEdit(JSON.parse(btn.dataset.user)));
@@ -309,6 +326,8 @@ function openCreate() {
   document.getElementById('modal-user-title').textContent = 'Novo usuário';
   document.getElementById('u-id').value = '';
   document.getElementById('user-form').reset();
+  document.getElementById('u-salario').value       = '';
+  document.getElementById('u-valor-adicional').value = '';
   document.getElementById('u-work-start').value    = '08:00';
   document.getElementById('u-work-end').value      = '18:00';
   document.getElementById('u-lunch-start').value   = '12:00';
@@ -324,9 +343,9 @@ function openEdit(u) {
   document.getElementById('u-nome').value         = u.nome;
   document.getElementById('u-email').value        = u.email;
   document.getElementById('u-setor').value        = u.setor_id ?? '';
-  document.getElementById('u-salario').value      = u.salario_bruto ?? 0;
+  document.getElementById('u-salario').value      = numToBRL(u.salario_bruto);
   document.getElementById('u-adicional').checked  = !!u.adicional_atrativo;
-  document.getElementById('u-valor-adicional').value = u.adicional_valor ?? '';
+  document.getElementById('u-valor-adicional').value = numToBRL(u.adicional_valor);
   document.getElementById('u-valor-adicional').classList.toggle('hidden', !u.adicional_atrativo);
   document.getElementById('u-work-start').value    = u.work_start    ?? '08:00';
   document.getElementById('u-work-end').value      = u.work_end      ?? '18:00';
@@ -368,27 +387,34 @@ document.getElementById('user-form').addEventListener('submit', async function(e
     email:                     document.getElementById('u-email').value,
     setor_id:                  document.getElementById('u-setor').value,
     perfis,
-    salario_bruto:             parseFloat(document.getElementById('u-salario').value) || 0,
+    salario_bruto:      parseBRL(document.getElementById('u-salario').value),
     adicional_atrativo: document.getElementById('u-adicional').checked,
     adicional_valor:    document.getElementById('u-adicional').checked
-                        ? parseFloat(document.getElementById('u-valor-adicional').value) || 0 : 0,
+                        ? parseBRL(document.getElementById('u-valor-adicional').value) : 0,
     work_start:                document.getElementById('u-work-start').value,
     work_end:                  document.getElementById('u-work-end').value,
     lunch_start:               document.getElementById('u-lunch-start').value,
     lunch_minutes:             parseInt(document.getElementById('u-lunch-minutes').value) || 60,
   };
 
-  const res  = await fetch('/api/users.php', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-  const data = await res.json();
-  btn.disabled = false; btn.textContent = id ? 'Salvar' : 'Criar';
+  try {
+    const res  = await fetch('/api/users.php', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    let data = {};
+    try { data = await res.json(); } catch(_) {}
+    btn.disabled = false; btn.textContent = id ? 'Salvar' : 'Criar';
 
-  if (!res.ok) {
-    document.getElementById('user-error').textContent = data.error;
-    document.getElementById('user-error').classList.remove('hidden'); return;
+    if (!res.ok) {
+      document.getElementById('user-error').textContent = data.error ?? `Erro ${res.status}.`;
+      document.getElementById('user-error').classList.remove('hidden'); return;
+    }
+    closeUserModal();
+    if (data.temp_password) { pendingReload = true; showPass(data.nome, data.temp_password); }
+    else location.reload();
+  } catch(err) {
+    btn.disabled = false; btn.textContent = id ? 'Salvar' : 'Criar';
+    document.getElementById('user-error').textContent = 'Erro de conexão. Tente novamente.';
+    document.getElementById('user-error').classList.remove('hidden');
   }
-  closeUserModal();
-  if (data.temp_password) { pendingReload = true; showPass(data.nome, data.temp_password); }
-  else location.reload();
 });
 
 function showPass(nome, pass) {

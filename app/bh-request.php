@@ -16,14 +16,23 @@ $stmtDed->execute([$uid]);
 $deducted    = (int)$stmtDed->fetchColumn();
 $balanceMins = $totalAprovMin - $deducted;
 
-// Jornada do colaborador
-$stmtU = $db->prepare("SELECT work_start, work_end, lunch_start, lunch_minutes FROM usuarios WHERE id = ?");
-$stmtU->execute([$uid]);
-$uRow      = $stmtU->fetch();
-$workStart  = $uRow ? substr($uRow['work_start'],  0, 5) : '08:00';
-$workEnd    = $uRow ? substr($uRow['work_end'],    0, 5) : '18:00';
-$lunchStart = $uRow ? substr($uRow['lunch_start'], 0, 5) : '12:00';
-$lunchMins  = $uRow ? (int)$uRow['lunch_minutes']        : 60;
+// Jornada do colaborador (try/catch protege contra schema antigo sem lunch_*)
+$workStart = '08:00'; $workEnd = '18:00'; $lunchStart = '12:00'; $lunchMins = 60;
+try {
+    $stmtU = $db->prepare("SELECT work_start, work_end, lunch_start, lunch_minutes FROM usuarios WHERE id = ?");
+    $stmtU->execute([$uid]);
+    $uRow      = $stmtU->fetch();
+    $workStart  = $uRow ? substr($uRow['work_start'],  0, 5) : '08:00';
+    $workEnd    = $uRow ? substr($uRow['work_end'],    0, 5) : '18:00';
+    $lunchStart = $uRow && isset($uRow['lunch_start'])   ? substr($uRow['lunch_start'], 0, 5) : '12:00';
+    $lunchMins  = $uRow && isset($uRow['lunch_minutes']) ? (int)$uRow['lunch_minutes']        : 60;
+} catch (\Throwable $e) {
+    $stmtU2 = $db->prepare("SELECT work_start, work_end FROM usuarios WHERE id = ?");
+    $stmtU2->execute([$uid]);
+    $uRow2     = $stmtU2->fetch();
+    $workStart = $uRow2 ? substr($uRow2['work_start'], 0, 5) : '08:00';
+    $workEnd   = $uRow2 ? substr($uRow2['work_end'],   0, 5) : '18:00';
+}
 
 // Histórico de solicitações
 $stmtReqs = $db->prepare("
@@ -280,7 +289,8 @@ function getPeriodInfo() {
   if(pt==='dia_inteiro'){
     const dateIso=document.getElementById('req-date-iso').value;
     if(!dateIso)return null;
-    return{dateLabel:formatDate(dateIso),periodLabel:`Dia inteiro · ${workStart} — ${workEnd} (−2h almoço)`,mins:workMins,days:1,tipo:'dia_inteiro',data_inicio:dateIso};
+    const lunchLabel=lunchMins>=60?`−${lunchMins/60}h almoço`:`−${lunchMins}min almoço`;
+    return{dateLabel:formatDate(dateIso),periodLabel:`Dia inteiro · ${workStart} — ${workEnd} (${lunchLabel})`,mins:workMins,days:1,tipo:'dia_inteiro',data_inicio:dateIso};
   }
   if(pt==='meio'){
     const dateIso=document.getElementById('req-date-iso').value;

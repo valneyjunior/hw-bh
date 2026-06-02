@@ -15,6 +15,7 @@ import BhEscalaSetor from './pages/BhEscalaSetor'
 import BhFolgas from './pages/BhFolgas'
 import BhAcionamento from './pages/BhAcionamento'
 import BhBackup from './pages/BhBackup'
+import BhAuditoria from './pages/BhAuditoria'
 
 function RootRedirect() {
   try {
@@ -121,6 +122,14 @@ export default function App() {
             element={
               <PrivateRoute apenasAdmin>
                 <BhSetores />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/auditoria"
+            element={
+              <PrivateRoute apenasAdmin>
+                <BhAuditoria />
               </PrivateRoute>
             }
           />

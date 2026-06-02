@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import (
-    ARRAY, Boolean, DateTime, Date, ForeignKey, Integer, Numeric,
+    ARRAY, Boolean, DateTime, Date, ForeignKey, Integer, JSON, Numeric,
     String, Text, Time, func, UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -151,3 +151,30 @@ class BhEscala(Base):
     )
 
     usuario: Mapped["Usuario"] = relationship("Usuario", foreign_keys=[usuario_id])
+
+
+class BhAuditLog(Base):
+    """
+    Trilha de auditoria tamper-evident (não-repúdio).
+    Cada registro encadeia o hash do anterior (`hash_anterior`) e grava o próprio
+    hash (`hash_registro` = SHA-256 do conteúdo + hash_anterior). Qualquer alteração
+    retroativa quebra a cadeia e é detectável na verificação de integridade.
+    A identidade do autor fica em snapshot (nome/e-mail) para sobreviver à
+    remoção/renomeação do usuário.
+    """
+    __tablename__ = "bh_audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    usuario_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("bh_usuarios.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    usuario_nome: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    usuario_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    acao: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    recurso: Mapped[str] = mapped_column(String(50), nullable=False)
+    recurso_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    ip: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    detalhes: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    hash_anterior: Mapped[str] = mapped_column(String(64), nullable=False)
+    hash_registro: Mapped[str] = mapped_column(String(64), nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -9,6 +9,20 @@ export interface UserInfo {
   telefone?: string | null
 }
 
+export interface AuditLog {
+  id: number
+  usuario_id: number | null
+  usuario_nome: string | null
+  usuario_email: string | null
+  acao: string
+  recurso: string
+  recurso_id: number | null
+  ip: string | null
+  detalhes: Record<string, unknown> | null
+  hash_registro: string
+  criado_em: string
+}
+
 export interface Disponivel {
   id: number
   usuario_id: number

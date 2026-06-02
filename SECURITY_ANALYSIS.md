@@ -1,12 +1,12 @@
 # Auditoria de Segurança — BH Pulse
 **OWASP Top 10 (2021) · Pré-produção**
-Data: 2026-06-02 · Versão: 1.1 (atualizado após correções) · Stack: FastAPI + SQLAlchemy async + JWT + React + PostgreSQL
+Data: 2026-06-02 · Versão: 1.2 (atualizado após correções) · Stack: FastAPI + SQLAlchemy async + JWT + React + PostgreSQL
 
 ---
 
 ## Sumário Executivo
 
-**Criticidade Geral: BAIXA-MÉDIA** *(era MÉDIA — 6 de 9 itens acionáveis corrigidos)*
+**Criticidade Geral: BAIXA** *(era MÉDIA — 7 de 9 itens acionáveis corrigidos; restam apenas 2, que dependem de ação manual e de infraestrutura de produção)*
 
 A migração da stack PHP (BH Tracker) para **FastAPI + React (BH Pulse)** eliminou por design as
 classes de vulnerabilidade mais críticas do sistema anterior:
@@ -15,16 +15,16 @@ classes de vulnerabilidade mais críticas do sistema anterior:
 - **XSS** — neutralizado pelo **escape automático do React** (JSX); não se usa `dangerouslySetInnerHTML`.
 - **Senhas** — armazenadas com **bcrypt (cost 12)**.
 
-Nesta revisão (v1.1), **6 itens de código/configuração foram corrigidos e validados**: segredo JWT,
-rate limiting, política de senha, security headers, CORS configurável e o aviso de startup. Restam
-itens que dependem de **ações manuais** (rotação de segredos) ou **infraestrutura de produção** (TLS),
-além da auditoria/log para uma sprint dedicada.
+Nesta revisão (v1.2), além das correções de v1.1 (segredo JWT, rate limiting, política de senha,
+security headers, CORS configurável), foi implementado o **audit log com trilha tamper-evident
+(não-repúdio)** — V-006. Restam apenas **2 itens**, ambos fora do código: rotação manual de segredos
+(V-002) e TLS de produção (V-004).
 
 | Criticidade | Total | Corrigido | Pendente |
 |:---|:---:|:---:|:---:|
 | 🔴 Crítica | 2 | 1 | 1 (ação manual) |
 | 🟠 Alta | 3 | 2 | 1 (requer servidor) |
-| 🟡 Média | 4 | 3 | 1 |
+| 🟡 Média | 4 | 4 | 0 |
 | 🟢 Por design/Mitigado | 3 | 3 | 0 |
 
 ---
@@ -38,7 +38,7 @@ além da auditoria/log para uma sprint dedicada.
 | V-003 | A02:2021 | `/admin/backup` | Backup expõe salários + hashes | 🟠 Alta | ✅ Mitigado |
 | V-004 | A05:2021 | `docker-compose.yml` | HTTP sem TLS | 🟠 Alta | ⚠️ Requer servidor |
 | V-005 | A07:2021 | `/v1/auth/login` | Sem rate limiting (brute force) | 🟠 Alta | ✅ Corrigido |
-| V-006 | A09:2021 | múltiplos | Logging/auditoria insuficiente | 🟡 Média | 🔲 Pendente |
+| V-006 | A09:2021 | múltiplos | Logging/auditoria insuficiente | 🟡 Média | ✅ Corrigido |
 | V-007 | A07:2021 | `auth.py` / `main.py` | Política de senha fraca (6 chars) | 🟡 Média | ✅ Corrigido |
 | V-008 | A05:2021 | FastAPI / Vite | Security headers ausentes | 🟡 Média | ✅ Corrigido |
 | V-009 | A05:2021 | CORS middleware | CORS amplo / fixo no código | 🟡 Média | ✅ Corrigido |
@@ -170,35 +170,42 @@ async def login(request: Request, payload: LoginIn, ...):
 
 ---
 
-## V-006 — Logging / auditoria insuficiente 🔲 PENDENTE
+## V-006 — Logging / auditoria insuficiente ✅ CORRIGIDO
 
 **OWASP A09:2021 — Security Logging and Monitoring Failures**
 
-Operações sensíveis não geram trilha de auditoria: aprovação/contestação de lançamentos,
-criação/edição/desativação de usuários, reset de senha, **backup e restore**, aprovação de folgas.
+**Correção aplicada** — implementado audit log com **trilha tamper-evident (não-repúdio)** em
+`backend/audit.py` + tabela `bh_audit_logs` (migration `0006`).
 
-**Correção recomendada — tabela de auditoria (Alembic):**
+**Como o não-repúdio é garantido:**
+- **Encadeamento por hash (SHA-256):** cada registro inclui o hash do anterior. Qualquer
+  alteração/remoção retroativa quebra a cadeia e é detectada na verificação.
+- **Atomicidade:** o registro entra na **mesma transação** da operação — não há ação sem log
+  nem log sem ação.
+- **Serialização:** `pg_advisory_xact_lock` evita corrida na escrita da cadeia.
+- **Snapshot de identidade:** grava nome/e-mail do autor (sobrevive à exclusão do usuário) + **IP** + timestamp.
+- **Sobrevive ao restore:** o restore usa `DELETE` ordenado (não `TRUNCATE CASCADE`), preservando
+  `bh_audit_logs`, e a própria restauração é auditada.
+
 ```python
-class AuditLog(Base):
-    __tablename__ = "bh_audit_logs"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    usuario_id: Mapped[Optional[int]] = mapped_column(ForeignKey("bh_usuarios.id", ondelete="SET NULL"))
-    acao: Mapped[str] = mapped_column(String(80))          # ex: "lancamento.aprovar"
-    recurso: Mapped[str] = mapped_column(String(50))
-    recurso_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    ip: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
-    detalhes: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-```
-```python
-async def audit(db, user_id, acao, recurso, recurso_id=None, ip=None, detalhes=None):
-    db.add(AuditLog(usuario_id=user_id, acao=acao, recurso=recurso,
-                    recurso_id=recurso_id, ip=ip, detalhes=detalhes))
-    # não fazer commit isolado: acompanha a transação da operação
+# audit.py — encadeamento e verificação
+async def registrar(db, *, usuario, acao, recurso, recurso_id=None, ip=None, detalhes=None) -> str:
+    await db.execute(text("SELECT pg_advisory_xact_lock(:k)").bindparams(k=_LOCK_KEY))
+    hash_anterior = (await db.execute(select(BhAuditLog.hash_registro)
+                     .order_by(BhAuditLog.id.desc()).limit(1))).scalar_one_or_none() or "GENESIS"
+    # hash_registro = sha256(conteúdo + hash_anterior) ...
 ```
 
-**Pontos obrigatórios:** login (sucesso/falha), CRUD de usuários, validação/contestação de
-lançamentos, aprovação/recusa de folgas, reset de senha, **backup/restore**.
+**Eventos auditados:** login (sucesso/falha), alteração de senha, aprovar/recusar/contestar
+lançamento, aprovar/recusar folga, criar/editar/config/reset-senha/desativar/arquivar/restaurar
+usuário, **baixar/restaurar backup**.
+
+**Endpoints (admin):** `GET /admin/auditoria` (consulta paginada) e
+`GET /admin/auditoria/verificar` (recalcula a cadeia e aponta o registro adulterado).
+
+**Validação:** adulterar um registro via SQL fez a verificação retornar
+`integro=false, quebrado_no_id=1`; restaurar o valor voltou a `integro=true`. Frontend em
+**Auditoria** (menu admin) com botão "Verificar integridade".
 
 ---
 
@@ -341,7 +348,7 @@ precisar esperar o token expirar. Expiração do token: `JWT_EXPIRE_HOURS = 8` (
 - [ ] **V-003**: (melhoria) criptografar arquivo de backup
 
 ### 🟡 Médio prazo
-- [ ] **V-006**: tabela `bh_audit_logs` + auditoria em operações sensíveis
+- [x] **V-006**: `bh_audit_logs` tamper-evident + auditoria em operações sensíveis + verificação de integridade
 - [x] **V-007**: política de senha forte (8+, letra + número)
 - [x] **V-008**: middleware de security headers (HSTS/CSP pendentes p/ produção)
 - [x] **V-009**: CORS configurável via `CORS_ORIGINS`
@@ -357,9 +364,9 @@ precisar esperar o token expirar. Expiração do token: `JWT_EXPIRE_HOURS = 8` (
 
 | Norma | Pontos atendidos | Pendências |
 |:---|:---|:---|
-| **LGPD** | Dados sob acesso autenticado e por perfil; aviso de confidencialidade no backup | TLS (V-004); audit log (V-006); criptografia de backup |
-| **ISO 27001/27002** | Controle de acesso, hash de senha, segregação de função | Logging/monitoramento (V-006); gestão de segredos (V-001/002) |
-| **ISO 20000** | Migrations versionadas; backup/restore documentado | Trilha de auditoria de mudanças (V-006) |
+| **LGPD** | Acesso autenticado e por perfil; aviso de confidencialidade no backup; **trilha de auditoria de acessos/alterações** | TLS (V-004); criptografia de backup |
+| **ISO 27001/27002** | Controle de acesso, hash de senha, segregação de função, **logging/monitoramento (V-006)** | Gestão de segredos em produção (V-002) |
+| **ISO 20000** | Migrations versionadas; backup/restore documentado; **trilha de auditoria de mudanças (não-repúdio)** | — |
 
 ---
 
@@ -369,6 +376,7 @@ precisar esperar o token expirar. Expiração do token: `JWT_EXPIRE_HOURS = 8` (
 |:-------|:-----|:----------|
 | 1.0 | 2026-06-02 | Auditoria inicial do BH Pulse (FastAPI + React) — 12 itens mapeados; SQLi e XSS protegidos por design |
 | 1.1 | 2026-06-02 | Corrigidos e validados: V-001 (JWT_SECRET), V-005 (rate limit), V-007 (política de senha), V-008 (security headers), V-009 (CORS configurável). Restam V-002 (rotação manual), V-004 (TLS) e V-006 (audit log) |
+| 1.2 | 2026-06-02 | V-006 implementado: audit log tamper-evident (hash encadeado) com verificação de integridade — não-repúdio. Restam apenas V-002 (manual) e V-004 (servidor) |
 
 ---
 

@@ -22,5 +22,6 @@ export const NAV_ITEMS: NavItem[] = [
   // Admin only
   { label: 'Usuários',           path: '/usuarios',       icon: 'users',        tipos: ['admin'] },
   { label: 'Setores',            path: '/setores',        icon: 'layers',       tipos: ['admin'] },
+  { label: 'Auditoria',          path: '/auditoria',      icon: 'shield',       tipos: ['admin'] },
   { label: 'Backup',             path: '/backup',         icon: 'database',     tipos: ['admin'] },
 ]

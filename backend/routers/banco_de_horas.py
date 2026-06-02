@@ -9,15 +9,16 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+import audit as audit_mod
 from auth import get_current_user, require_acionamento, require_permissao_coordenador, require_tipo
 from database import get_db
-from models import BhConfigUsuario, BhEscala, BhFolga, BhLancamento, BhSetor, Usuario
+from models import BhAuditLog, BhConfigUsuario, BhEscala, BhFolga, BhLancamento, BhSetor, Usuario
 
 router = APIRouter(prefix="/v1/banco-de-horas", tags=["banco-de-horas"])
 
@@ -544,6 +545,7 @@ async def admin_lancamentos(
 @router.post("/admin/lancamentos/{lancamento_id}/aprovar", response_model=LancamentoOut)
 async def aprovar_lancamento(
     lancamento_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_permissao_coordenador()),
 ):
@@ -577,6 +579,12 @@ async def aprovar_lancamento(
     lanc.revisado_em = datetime.now(timezone.utc)
     lanc.total_minutos = calc_total_minutos(lanc.hora_inicio, lanc.hora_fim)
 
+    await audit_mod.registrar(
+        db, usuario=current_user, acao="lancamento.aprovar", recurso="lancamento",
+        recurso_id=lanc.id, ip=audit_mod.client_ip(request),
+        detalhes={"autor_id": lanc.usuario_id, "chamado": lanc.chamado,
+                  "data": str(lanc.data_acionamento), "valor_clt": str(valor)},
+    )
     await db.commit()
     await db.refresh(lanc)
     return LancamentoOut.from_orm_with_usuario(lanc)
@@ -586,6 +594,7 @@ async def aprovar_lancamento(
 async def recusar_lancamento(
     lancamento_id: int,
     payload: RecusarIn,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_permissao_coordenador()),
 ):
@@ -612,6 +621,11 @@ async def recusar_lancamento(
     lanc.revisado_por = current_user.id
     lanc.revisado_em = datetime.now(timezone.utc)
 
+    await audit_mod.registrar(
+        db, usuario=current_user, acao="lancamento.recusar", recurso="lancamento",
+        recurso_id=lanc.id, ip=audit_mod.client_ip(request),
+        detalhes={"autor_id": lanc.usuario_id, "chamado": lanc.chamado, "nota": payload.nota_revisao},
+    )
     await db.commit()
     await db.refresh(lanc)
     return LancamentoOut.from_orm_with_usuario(lanc)
@@ -621,6 +635,7 @@ async def recusar_lancamento(
 async def contestar_lancamento(
     lancamento_id: int,
     payload: RecusarIn,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_permissao_coordenador()),
 ):
@@ -647,6 +662,11 @@ async def contestar_lancamento(
     lanc.revisado_por = current_user.id
     lanc.revisado_em = datetime.now(timezone.utc)
 
+    await audit_mod.registrar(
+        db, usuario=current_user, acao="lancamento.contestar", recurso="lancamento",
+        recurso_id=lanc.id, ip=audit_mod.client_ip(request),
+        detalhes={"autor_id": lanc.usuario_id, "chamado": lanc.chamado, "nota": payload.nota_revisao},
+    )
     await db.commit()
     await db.refresh(lanc)
     return LancamentoOut.from_orm_with_usuario(lanc)
@@ -836,8 +856,9 @@ async def admin_usuarios(
 async def salvar_config_usuario(
     usuario_id: int,
     payload: ConfigIn,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: Usuario = Depends(require_tipo("admin")),
+    current_user: Usuario = Depends(require_tipo("admin")),
 ):
     config = await _get_config(db, usuario_id)
     if config:
@@ -846,6 +867,12 @@ async def salvar_config_usuario(
     else:
         config = BhConfigUsuario(usuario_id=usuario_id, **payload.model_dump())
         db.add(config)
+    await audit_mod.registrar(
+        db, usuario=current_user, acao="usuario.config", recurso="config_usuario",
+        recurso_id=usuario_id, ip=audit_mod.client_ip(request),
+        detalhes={"salario_bruto": str(payload.salario_bruto),
+                  "adicional_atrativo": str(payload.adicional_atrativo)},
+    )
     await db.commit()
     await db.refresh(config)
     return ConfigOut.model_validate(config)
@@ -854,8 +881,9 @@ async def salvar_config_usuario(
 @router.post("/admin/usuarios", response_model=UsuarioOut, status_code=status.HTTP_201_CREATED)
 async def criar_usuario(
     payload: UsuarioCriarIn,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: Usuario = Depends(require_tipo("admin")),
+    current_user: Usuario = Depends(require_tipo("admin")),
 ):
     from auth import hash_password, validar_forca_senha
     from email_service import enviar_acesso
@@ -904,6 +932,11 @@ async def criar_usuario(
         adicional_atrativo=payload.adicional_atrativo,
     )
     db.add(config)
+    await audit_mod.registrar(
+        db, usuario=current_user, acao="usuario.criar", recurso="usuario",
+        recurso_id=user.id, ip=audit_mod.client_ip(request),
+        detalhes={"nome": user.nome, "email": user.email, "perfis": perfis},
+    )
     await db.commit()
     await db.refresh(user)
 
@@ -1029,8 +1062,9 @@ async def deletar_setor(
 async def editar_usuario(
     usuario_id: int,
     payload: UsuarioEditarIn,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: Usuario = Depends(require_tipo("admin")),
+    current_user: Usuario = Depends(require_tipo("admin")),
 ):
     result = await db.execute(select(Usuario).where(Usuario.id == usuario_id))
     usuario = result.scalar_one_or_none()
@@ -1058,6 +1092,12 @@ async def editar_usuario(
     else:
         usuario.grupo_nome = None
 
+    await audit_mod.registrar(
+        db, usuario=current_user, acao="usuario.editar", recurso="usuario",
+        recurso_id=usuario_id, ip=audit_mod.client_ip(request),
+        detalhes={"nome": payload.nome, "email": payload.email,
+                  "perfis": payload.perfis, "ativo": payload.ativo},
+    )
     await db.commit()
     await db.refresh(usuario)
     return UsuarioOut.model_validate(usuario)
@@ -1072,6 +1112,7 @@ class ResetarSenhaIn(BaseModel):
 async def resetar_senha_usuario(
     usuario_id: int,
     payload: ResetarSenhaIn,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_tipo("admin")),
 ):
@@ -1086,6 +1127,11 @@ async def resetar_senha_usuario(
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     usuario.senha_hash = hash_password(payload.nova_senha)
     usuario.must_change_password = True
+    await audit_mod.registrar(
+        db, usuario=current_user, acao="usuario.resetar_senha", recurso="usuario",
+        recurso_id=usuario_id, ip=audit_mod.client_ip(request),
+        detalhes={"alvo": usuario.email, "enviou_email": payload.enviar_email},
+    )
     await db.commit()
     await db.refresh(usuario)
 
@@ -1098,6 +1144,7 @@ async def resetar_senha_usuario(
 @router.post("/admin/usuarios/{usuario_id}/desativar", response_model=UsuarioOut)
 async def desativar_usuario(
     usuario_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_tipo("admin")),
 ):
@@ -1108,6 +1155,11 @@ async def desativar_usuario(
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     usuario.ativo = not usuario.ativo  # toggle ativar/desativar
+    await audit_mod.registrar(
+        db, usuario=current_user, acao="usuario.ativar" if usuario.ativo else "usuario.desativar",
+        recurso="usuario", recurso_id=usuario_id, ip=audit_mod.client_ip(request),
+        detalhes={"alvo": usuario.email, "ativo": usuario.ativo},
+    )
     await db.commit()
     await db.refresh(usuario)
     return UsuarioOut.model_validate(usuario)
@@ -1116,6 +1168,7 @@ async def desativar_usuario(
 @router.post("/admin/usuarios/{usuario_id}/arquivar", response_model=UsuarioOut)
 async def arquivar_usuario(
     usuario_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_tipo("admin")),
 ):
@@ -1127,6 +1180,11 @@ async def arquivar_usuario(
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     usuario.arquivado = True
     usuario.ativo = False
+    await audit_mod.registrar(
+        db, usuario=current_user, acao="usuario.arquivar", recurso="usuario",
+        recurso_id=usuario_id, ip=audit_mod.client_ip(request),
+        detalhes={"alvo": usuario.email},
+    )
     await db.commit()
     await db.refresh(usuario)
     return UsuarioOut.model_validate(usuario)
@@ -1135,8 +1193,9 @@ async def arquivar_usuario(
 @router.post("/admin/usuarios/{usuario_id}/restaurar", response_model=UsuarioOut)
 async def restaurar_usuario(
     usuario_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: Usuario = Depends(require_tipo("admin")),
+    current_user: Usuario = Depends(require_tipo("admin")),
 ):
     result = await db.execute(select(Usuario).where(Usuario.id == usuario_id))
     usuario = result.scalar_one_or_none()
@@ -1144,6 +1203,11 @@ async def restaurar_usuario(
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     usuario.arquivado = False
     usuario.ativo = True
+    await audit_mod.registrar(
+        db, usuario=current_user, acao="usuario.restaurar", recurso="usuario",
+        recurso_id=usuario_id, ip=audit_mod.client_ip(request),
+        detalhes={"alvo": usuario.email},
+    )
     await db.commit()
     await db.refresh(usuario)
     return UsuarioOut.model_validate(usuario)
@@ -1543,6 +1607,7 @@ async def admin_folgas(
 @router.post("/admin/folgas/{folga_id}/aprovar", response_model=FolgaOut)
 async def aprovar_folga(
     folga_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_permissao_coordenador()),
 ):
@@ -1558,6 +1623,12 @@ async def aprovar_folga(
     folga.status = "aprovado"
     folga.revisado_por = current_user.id
     folga.revisado_em = datetime.now(timezone.utc)
+    await audit_mod.registrar(
+        db, usuario=current_user, acao="folga.aprovar", recurso="folga",
+        recurso_id=folga.id, ip=audit_mod.client_ip(request),
+        detalhes={"autor_id": folga.usuario_id, "tipo": folga.tipo,
+                  "data": str(folga.data_folga), "minutos": folga.minutos_deduzidos},
+    )
     await db.commit()
     await db.refresh(folga)
     o = FolgaOut.model_validate(folga)
@@ -1569,6 +1640,7 @@ async def aprovar_folga(
 async def recusar_folga(
     folga_id: int,
     payload: RecusarIn,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_permissao_coordenador()),
 ):
@@ -1585,6 +1657,11 @@ async def recusar_folga(
     folga.nota_revisao = payload.nota_revisao
     folga.revisado_por = current_user.id
     folga.revisado_em = datetime.now(timezone.utc)
+    await audit_mod.registrar(
+        db, usuario=current_user, acao="folga.recusar", recurso="folga",
+        recurso_id=folga.id, ip=audit_mod.client_ip(request),
+        detalhes={"autor_id": folga.usuario_id, "tipo": folga.tipo, "nota": payload.nota_revisao},
+    )
     await db.commit()
     await db.refresh(folga)
     o = FolgaOut.model_validate(folga)
@@ -1638,14 +1715,23 @@ def _coerce(value, coltype):
 
 @router.get("/admin/backup")
 async def baixar_backup(
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: Usuario = Depends(require_tipo("admin")),
+    current_user: Usuario = Depends(require_tipo("admin")),
 ):
     """Exporta todas as tabelas do sistema em um único JSON (download)."""
     tabelas: dict[str, list] = {}
     for chave, modelo in _BACKUP_TABELAS:
         result = await db.execute(select(modelo))
         tabelas[chave] = [_row_to_dict(o) for o in result.scalars().all()]
+
+    # Auditoria: exportar dados sensíveis (salários/hashes) é evento de não-repúdio
+    await audit_mod.registrar(
+        db, usuario=current_user, acao="backup.baixar", recurso="sistema",
+        ip=audit_mod.client_ip(request),
+        detalhes={k: len(v) for k, v in tabelas.items()},
+    )
+    await db.commit()
 
     return {
         "versao": "1.0",
@@ -1659,25 +1745,31 @@ class RestoreIn(BaseModel):
     tabelas: dict[str, list]
 
 
+# Ordem reversa (filhos → pais) para DELETE sem CASCADE — preserva bh_audit_logs.
+_RESTORE_DELETE_ORDER = ["bh_escala", "bh_folgas", "bh_lancamentos",
+                         "bh_config_usuario", "bh_usuarios", "bh_setores"]
+
+
 @router.post("/admin/restore")
 async def restaurar_backup(
     payload: RestoreIn,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: Usuario = Depends(require_tipo("admin")),
+    current_user: Usuario = Depends(require_tipo("admin")),
 ):
     """
     Restaura um backup JSON SUBSTITUINDO todos os dados atuais.
     Operação destrutiva e transacional: em caso de erro, nada é alterado.
+    A trilha de auditoria (bh_audit_logs) é PRESERVADA — usamos DELETE em ordem
+    (não TRUNCATE CASCADE), e o evento de restauração é registrado.
     """
     if "usuarios" not in payload.tabelas or "setores" not in payload.tabelas:
         raise HTTPException(status_code=400, detail="Backup inválido: tabelas essenciais ausentes")
 
     try:
-        # 1) Limpa tudo e reseta sequências (CASCADE respeita as FKs)
-        await db.execute(text(
-            "TRUNCATE bh_folgas, bh_escala, bh_lancamentos, bh_config_usuario, "
-            "bh_usuarios, bh_setores RESTART IDENTITY CASCADE"
-        ))
+        # 1) Limpa as tabelas de dados em ordem (NÃO toca em bh_audit_logs)
+        for tabela in _RESTORE_DELETE_ORDER:
+            await db.execute(text(f"DELETE FROM {tabela}"))
 
         # 2) Insere preservando IDs, na ordem de dependência
         contagem: dict[str, int] = {}
@@ -1696,9 +1788,73 @@ async def restaurar_backup(
                 f"SELECT setval('{seq}', (SELECT COALESCE(MAX(id), 1) FROM {tabela}))"
             ))
 
+        # 4) Registra a restauração na trilha (sobrevive porque não truncamos audit)
+        await audit_mod.registrar(
+            db, usuario=current_user, acao="backup.restaurar", recurso="sistema",
+            ip=audit_mod.client_ip(request), detalhes=contagem,
+        )
         await db.commit()
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=400, detail=f"Falha ao restaurar: {e}")
 
     return {"detail": "Backup restaurado com sucesso", "contagem": contagem}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Auditoria (admin) — consulta da trilha e verificação de integridade
+# ══════════════════════════════════════════════════════════════════════════════
+
+class AuditOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    usuario_id: Optional[int]
+    usuario_nome: Optional[str]
+    usuario_email: Optional[str]
+    acao: str
+    recurso: str
+    recurso_id: Optional[int]
+    ip: Optional[str]
+    detalhes: Optional[dict]
+    hash_registro: str
+    criado_em: datetime
+
+
+class AuditPage(BaseModel):
+    items: list[AuditOut]
+    total: int
+    page: int
+    per_page: int
+
+
+@router.get("/admin/auditoria", response_model=AuditPage)
+async def listar_auditoria(
+    acao: Optional[str] = Query(None),
+    usuario_id: Optional[int] = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    _: Usuario = Depends(require_tipo("admin")),
+):
+    q = select(BhAuditLog)
+    if acao:
+        q = q.where(BhAuditLog.acao == acao)
+    if usuario_id:
+        q = q.where(BhAuditLog.usuario_id == usuario_id)
+
+    total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar_one()
+    q = q.order_by(BhAuditLog.id.desc()).offset((page - 1) * per_page).limit(per_page)
+    result = await db.execute(q)
+    return AuditPage(
+        items=[AuditOut.model_validate(r) for r in result.scalars().all()],
+        total=total, page=page, per_page=per_page,
+    )
+
+
+@router.get("/admin/auditoria/verificar")
+async def verificar_auditoria(
+    db: AsyncSession = Depends(get_db),
+    _: Usuario = Depends(require_tipo("admin")),
+):
+    """Recalcula a cadeia de hash e indica se a trilha foi adulterada."""
+    return await audit_mod.verificar_integridade(db)

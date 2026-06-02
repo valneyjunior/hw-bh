@@ -122,6 +122,14 @@ export const restaurarUsuario = (id: number) =>
 export const getAdminEscala = (params?: Record<string, string>) =>
   api.get('/v1/banco-de-horas/admin/escala', { params })
 
+// ── Auditoria (admin) ─────────────────────────────────────────────────────────
+
+export const getAuditoria = (params?: Record<string, string>) =>
+  api.get('/v1/banco-de-horas/admin/auditoria', { params })
+
+export const verificarAuditoria = () =>
+  api.get('/v1/banco-de-horas/admin/auditoria/verificar')
+
 // ── Backup / Restore (admin) ──────────────────────────────────────────────────
 
 export const baixarBackup = () =>

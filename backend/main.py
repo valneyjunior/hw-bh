@@ -21,6 +21,7 @@ from auth import (
     validar_forca_senha,
     verify_password,
 )
+import audit as audit_mod
 from config import get_settings
 from database import get_db
 from models import Usuario
@@ -117,10 +118,22 @@ async def login(request: Request, payload: LoginIn, db: AsyncSession = Depends(g
     )
     user = result.scalar_one_or_none()
     if not user or not verify_password(payload.senha, user.senha_hash):
+        # Auditoria de tentativa falha (não-repúdio / detecção de brute force)
+        await audit_mod.registrar(
+            db, usuario=user, acao="auth.login_falha", recurso="auth",
+            ip=audit_mod.client_ip(request), detalhes={"email": payload.email},
+        )
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciais inválidas",
         )
+
+    await audit_mod.registrar(
+        db, usuario=user, acao="auth.login", recurso="auth",
+        recurso_id=user.id, ip=audit_mod.client_ip(request),
+    )
+    await db.commit()
 
     token_data = {
         "sub": user.email,
@@ -148,6 +161,7 @@ async def login(request: Request, payload: LoginIn, db: AsyncSession = Depends(g
 @app.post("/v1/auth/alterar-senha", response_model=MsgOut)
 async def alterar_senha(
     payload: AlterarSenhaIn,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
@@ -159,6 +173,10 @@ async def alterar_senha(
 
     current_user.senha_hash = hash_password(payload.nova_senha)
     current_user.must_change_password = False
+    await audit_mod.registrar(
+        db, usuario=current_user, acao="auth.alterar_senha", recurso="auth",
+        recurso_id=current_user.id, ip=audit_mod.client_ip(request),
+    )
     await db.commit()
     return MsgOut(detail="Senha alterada com sucesso")
 

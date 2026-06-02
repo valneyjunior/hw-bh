@@ -1,18 +1,31 @@
-# Ambiente e segredos
+# Env
 .env
-.env.local
-.env.*.local
+*.env.local
 
-# Dependências
-vendor/
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# Node
 node_modules/
+dist/
+.cache/
+*.tsbuildinfo
 
-# Cache e logs PHP/Apache
-*.log
-/app/cache/
-/app/tmp/
+# Alembic
+backend/migrations/versions/*.pyc
 
-# IDE
+# IDEs
 .vscode/
 .idea/
 *.swp
@@ -22,12 +35,7 @@ node_modules/
 .DS_Store
 Thumbs.db
 
-# Docker volumes (dados locais)
-postgres-data/
-
-# Arquivos de upload temporários
-/app/uploads/tmp/
-
-# Scripts de migração legados
-app/sql/migration_v2.sql
-import_planilha.py
+# Backups / dumps (contêm dados sensíveis)
+*.dump
+*.sql.bak
+bh-pulse-backup-*.json

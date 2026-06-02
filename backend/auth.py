@@ -23,6 +23,21 @@ def hash_password(plain: str) -> str:
     return bcrypt.hashpw(plain.encode(), bcrypt.gensalt(rounds=12)).decode()
 
 
+def validar_forca_senha(senha: str) -> Optional[str]:
+    """
+    V-007 — Política de senha. Retorna mensagem de erro se fraca, ou None se OK.
+    Mínimo de 8 caracteres com pelo menos uma letra e um número.
+    (Alinhado ao gerador automático de senhas do sistema.)
+    """
+    if len(senha) < 8:
+        return "A senha deve ter ao menos 8 caracteres."
+    if not any(c.isalpha() for c in senha):
+        return "A senha deve conter ao menos uma letra."
+    if not any(c.isdigit() for c in senha):
+        return "A senha deve conter ao menos um número."
+    return None
+
+
 def verify_password(plain: str, hashed: str) -> bool:
     try:
         return bcrypt.checkpw(plain.encode(), hashed.encode())

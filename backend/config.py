@@ -14,6 +14,17 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "troque_por_string_aleatoria_32chars"
     JWT_EXPIRE_HOURS: int = 8
 
+    # Origens permitidas para CORS (separadas por vírgula). Em produção, use o domínio HTTPS.
+    CORS_ORIGINS: str = "http://localhost:3001,http://127.0.0.1:3001"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
+    @property
+    def jwt_secret_inseguro(self) -> bool:
+        return self.JWT_SECRET == "troque_por_string_aleatoria_32chars"
+
     ADMIN_EMAIL: str = "admin@hostweb.cloud"
     ADMIN_PASSWORD: str = "Admin@123"
     ADMIN_NAME: str = "Administrador"

@@ -857,8 +857,12 @@ async def criar_usuario(
     db: AsyncSession = Depends(get_db),
     _: Usuario = Depends(require_tipo("admin")),
 ):
-    from auth import hash_password
+    from auth import hash_password, validar_forca_senha
     from email_service import enviar_acesso
+
+    erro_senha = validar_forca_senha(payload.senha)
+    if erro_senha:
+        raise HTTPException(status_code=400, detail=erro_senha)
 
     exist = await db.execute(select(Usuario).where(Usuario.email == payload.email))
     if exist.scalar_one_or_none():
@@ -1071,8 +1075,11 @@ async def resetar_senha_usuario(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_tipo("admin")),
 ):
-    from auth import hash_password
+    from auth import hash_password, validar_forca_senha
     from email_service import enviar_reset_senha
+    erro_senha = validar_forca_senha(payload.nova_senha)
+    if erro_senha:
+        raise HTTPException(status_code=400, detail=erro_senha)
     result = await db.execute(select(Usuario).where(Usuario.id == usuario_id))
     usuario = result.scalar_one_or_none()
     if not usuario:

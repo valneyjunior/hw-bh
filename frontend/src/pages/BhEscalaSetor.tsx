@@ -162,7 +162,7 @@ export default function BhEscalaSetor() {
       {/* Cabeçalho */}
       <div className="flex items-start justify-between mb-5">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Escala do Setor</h1>
+          <h1 className="text-xl font-bold text-gray-900">Escala da Equipe</h1>
           <p className="text-sm text-gray-500 mt-0.5">
             Disponibilidade voluntária dos colaboradores — {NOMES_MES[mes]} {ano}
           </p>

@@ -76,6 +76,29 @@ function IconCreditCard() {
   )
 }
 
+function IconWallet() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path d="M20 12V8H6a2 2 0 0 1 0-4h12v4" />
+      <path d="M4 6v12a2 2 0 0 0 2 2h14v-4" />
+      <path d="M18 12a2 2 0 0 0 0 4h4v-4z" />
+    </svg>
+  )
+}
+
+function IconCalendarTeam() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+      <circle cx="9" cy="15" r="1.4" />
+      <circle cx="13" cy="15" r="1.4" />
+    </svg>
+  )
+}
+
 function IconShield() {
   return (
     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -112,6 +135,8 @@ function NavIcon({ icon }: { icon: string }) {
     case 'users': return <IconUsers />
     case 'layers': return <IconLayers />
     case 'credit-card': return <IconCreditCard />
+    case 'wallet': return <IconWallet />
+    case 'calendar-team': return <IconCalendarTeam />
     case 'phone': return <IconPhone />
     case 'database': return <IconDatabase />
     case 'shield': return <IconShield />

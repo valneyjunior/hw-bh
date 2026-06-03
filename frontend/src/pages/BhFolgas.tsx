@@ -167,8 +167,8 @@ export default function BhFolgas() {
       {/* Cabeçalho */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Banco de Horas</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Solicite o uso do seu banco de horas acumulado</p>
+          <h1 className="text-xl font-bold text-gray-900">Meu Banco de Horas</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Seu saldo e solicitações de uso do banco de horas</p>
         </div>
         <Link to="/" className="text-sm font-medium hover:underline" style={{ color: '#8B5CF6' }}>
           ← Meus registros

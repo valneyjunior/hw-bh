@@ -8,16 +8,16 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  // Analista
-  { label: 'Meus Registros',    path: '/meus-registros', icon: 'clock',        tipos: ['analista'] },
-  { label: 'Banco de Horas',    path: '/folgas',        icon: 'credit-card',  tipos: ['analista'] },
-  { label: 'Escala',            path: '/escala',        icon: 'calendar',     tipos: ['analista'] },
+  // Analista (visão pessoal — termos de posse)
+  { label: 'Meus Registros',     path: '/meus-registros', icon: 'clock',        tipos: ['analista'] },
+  { label: 'Meu Banco de Horas', path: '/folgas',         icon: 'credit-card',  tipos: ['analista'] },
+  { label: 'Minha Escala',       path: '/escala',         icon: 'calendar',     tipos: ['analista'] },
   // Atendimento Corporativo
   { label: 'Acionamento',        path: '/acionamento',    icon: 'phone',        tipos: ['atendimento', 'admin'] },
-  // Coordenador + Admin
+  // Coordenador + Admin (visão de equipe)
   { label: 'Validação',          path: '/validacao',      icon: 'check-circle', tipos: ['admin', 'coordenador'] },
-  { label: 'Banco de Horas',     path: '/banco-horas',    icon: 'clock',        tipos: ['admin', 'coordenador'] },
-  { label: 'Escala',             path: '/escala-setor',   icon: 'calendar',     tipos: ['admin', 'coordenador'] },
+  { label: 'BH da Equipe',       path: '/banco-horas',    icon: 'wallet',       tipos: ['admin', 'coordenador'] },
+  { label: 'Escala da Equipe',   path: '/escala-setor',   icon: 'calendar-team', tipos: ['admin', 'coordenador'] },
   { label: 'Relatórios',         path: '/relatorios',     icon: 'bar-chart',    tipos: ['admin', 'coordenador'] },
   // Admin only
   { label: 'Usuários',           path: '/usuarios',       icon: 'users',        tipos: ['admin'] },

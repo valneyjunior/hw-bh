@@ -113,8 +113,8 @@ export default function BancoDeHoras() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Meu Banco de Horas</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Acompanhe seus acionamentos e saldo</p>
+          <h1 className="text-2xl font-bold text-slate-900">Meus Registros</h1>
+          <p className="text-slate-500 text-sm mt-0.5">Seus acionamentos e horas extras lançadas</p>
         </div>
         <button
           onClick={() => { setLancamentoEditar(null); setModalAberto(true) }}

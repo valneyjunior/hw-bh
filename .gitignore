@@ -39,3 +39,6 @@ Thumbs.db
 *.dump
 *.sql.bak
 bh-pulse-backup-*.json
+
+# Documento de negociação/integração — não faz parte do repo do produto
+docs/INTEGRACAO-PULSE.md
